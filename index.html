@@ -107,6 +107,7 @@
             backdrop-filter: blur(4px);
             z-index: 20;
             touch-action: none; /* Evita el scroll de la página al arrastrar en móvil */
+            max-width: 95vw;
         }
         
         #graphs-header {
@@ -159,9 +160,9 @@
                     <p class="text-xs text-center text-gray-400">Gráficas Cinemáticas</p>
                 </div>
                 <div id="graphs-content">
-                    <canvas id="graph-xt" width="150" height="100"></canvas>
-                    <canvas id="graph-vyt" width="150" height="100"></canvas>
-                    <canvas id="graph-ayt" width="150" height="100"></canvas>
+                    <canvas id="graph-xt"></canvas>
+                    <canvas id="graph-vyt"></canvas>
+                    <canvas id="graph-ayt"></canvas>
                 </div>
             </div>
 
@@ -173,13 +174,13 @@
         </div>
 
         <!-- Columna de Controles -->
-        <div class="w-full h-[60vh] md:h-full bg-[#1f2937] p-6 overflow-y-auto border-l border-gray-700 custom-scrollbar">
+        <div class="w-full h-[60vh] md:h-full bg-[#1f2937] p-4 md:p-6 overflow-y-auto border-l border-gray-700 custom-scrollbar">
             <div class="max-w-md mx-auto">
                 
                 <!-- Enlace de autoría -->
                 <div class="text-center mb-4">
                     <a href="https://aulaquest.com" target="_blank" rel="noopener noreferrer" class="text-xs text-gray-500 hover:text-gray-400 transition-colors">
-                         aulaquest.com
+                        Creada por aulaquest
                     </a>
                 </div>
 
@@ -226,7 +227,7 @@
                 </div>
 
                 <!-- Opciones de Visualización -->
-                <div class="mt-6 grid grid-cols-2 gap-4">
+                <div class="mt-4 md:mt-6 grid grid-cols-2 gap-4">
                     <label class="flex items-center space-x-2 text-sm text-gray-400 cursor-pointer">
                         <input type="checkbox" id="showAxesLabels" class="form-checkbox bg-gray-700 border-gray-500 text-sky-500 rounded focus:ring-sky-500" checked>
                         <span>Ejes</span>
@@ -254,7 +255,7 @@
                 </div>
 
                 <!-- Slider de Resistencia del Aire -->
-                <div class="mt-6">
+                <div class="mt-4 md:mt-6">
                     <label for="airResistance" class="block text-xs font-medium text-gray-400">Resistencia al Aire (k)</label>
                     <div class="flex items-center space-x-4 mt-1">
                         <input type="range" id="airResistance" min="0" max="0.1" value="0" step="0.001" class="flex-grow">
@@ -263,7 +264,7 @@
                 </div>
 
                 <!-- Botones de Acción -->
-                <div class="grid grid-cols-1 gap-4 mt-6">
+                <div class="grid grid-cols-1 gap-4 mt-4 md:mt-6">
                     <button id="startBtn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-opacity-50 text-sm bg-green-600 hover:bg-green-700 focus:ring-green-500 disabled:bg-gray-500 disabled:cursor-not-allowed">Iniciar</button>
                     <button id="speedBtn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-opacity-50 text-sm bg-gray-600 hover:bg-gray-700 focus:ring-gray-500">Velocidad: Normal</button>
                 </div>
@@ -396,6 +397,7 @@
                 const parent = canvas.parentElement;
                 canvas.width = parent.clientWidth;
                 canvas.height = parent.clientHeight;
+                adjustGraphCanvasSizes();
                 draw();
             }
 
@@ -780,6 +782,16 @@
                 ctx.restore();
             }
             
+            function adjustGraphCanvasSizes() {
+                const isMobile = window.innerWidth < 768;
+                const graphWidth = isMobile ? 90 : 150;
+                const graphHeight = isMobile ? 60 : 100;
+                [graphXtCanvas, graphVytCanvas, graphAytCanvas].forEach(c => {
+                    c.width = graphWidth;
+                    c.height = graphHeight;
+                });
+            }
+
             function drawAllGraphs() {
                 const { t, x, vy, ay } = simulationState.graphsData;
                 if (t.length < 2) return;
