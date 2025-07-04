@@ -180,7 +180,7 @@
                 <!-- Enlace de autoría -->
                 <div class="text-center mb-4">
                     <a href="https://aulaquest.com" target="_blank" rel="noopener noreferrer" class="text-xs text-gray-500 hover:text-gray-400 transition-colors">
-                        Creado por aulaquest.com
+                        Creada por aulaquest.com
                     </a>
                 </div>
 
@@ -787,7 +787,7 @@
             
             function adjustGraphCanvasSizes() {
                 const isMobile = window.innerWidth < 768;
-                const graphWidth = isMobile ? (window.innerWidth * 0.95 - 40) / 3 : 150;
+                const graphWidth = isMobile ? (window.innerWidth * 0.9 - 32) / 3 : 150;
                 const graphHeight = isMobile ? graphWidth * 0.66 : 100;
                 [graphXtCanvas, graphVytCanvas, graphAytCanvas].forEach(c => {
                     c.width = graphWidth;
@@ -1180,6 +1180,7 @@
             
             function handleGraphDrag(e) {
                 if (simulationState.graphsContainerState.isDragging) {
+                    e.preventDefault();
                     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
                     graphsContainer.style.left = `${clientX - simulationState.graphsContainerState.offsetX}px`;
@@ -1197,10 +1198,10 @@
                 simulationState.graphsContainerState.isDragging = true;
                 simulationState.graphsContainerState.offsetX = e.touches[0].clientX - graphsContainer.offsetLeft;
                 simulationState.graphsContainerState.offsetY = e.touches[0].clientY - graphsContainer.offsetTop;
-            }, { passive: true });
+            }, { passive: false });
 
             document.addEventListener('mousemove', handleGraphDrag);
-            document.addEventListener('touchmove', handleGraphDrag);
+            document.addEventListener('touchmove', handleGraphDrag, { passive: false });
 
             document.addEventListener('mouseup', () => {
                 simulationState.graphsContainerState.isDragging = false;
