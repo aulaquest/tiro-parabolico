@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Tiro Parabólico (Diseño Oscuro)</title>
+    
+    <!-- Carga de Tailwind CSS con el plugin de formularios para checkboxes -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    
+    <!-- Carga de la fuente Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Carga de Tone.js para efectos de sonido -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+
+    <style>
+        /* Estilos base con tema oscuro */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827;
+            color: #d1d5db;
+            overscroll-behavior: none;
+        }
+
+        /* Estilos para los sliders en tema oscuro */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #4b5563;
+            outline: none;
+            opacity: 0.8;
+            transition: opacity .2s;
+        }
+
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            border: 3px solid #1f2937;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            border: 3px solid #1f2937;
+        }
+
+        /* Asegura que el canvas ocupe todo el espacio de su contenedor */
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: default; /* Cursor por defecto */
+        }
+        
+        canvas.interactive {
+            cursor: pointer; /* Cursor de puntero cuando hay elementos interactivos */
+        }
+        
+        canvas.dragging {
+            cursor: grabbing; /* Cursor mientras se arrastra la diana */
+        }
+
+        /* Estilo para el tooltip de la trayectoria */
+        #tooltip {
+            position: absolute;
+            display: none;
+            background-color: rgba(17, 24, 39, 0.9); /* bg-gray-900 con opacidad */
+            color: #d1d5db;
+            border: 1px solid #4b5563;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-size: 0.75rem;
+            line-height: 1rem;
+            pointer-events: none; /* Para que no interfiera con el mousemove del canvas */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            white-space: nowrap;
+            z-index: 10;
+            transform: translate(15px, -50%); /* Posicionamiento inicial */
+        }
+        
+        /* Contenedor de las gráficas */
+        #graphs-container {
+            position: absolute;
+            display: none;
+            background-color: rgba(31, 41, 55, 0.85);
+            border: 1px solid #4b5563;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            backdrop-filter: blur(4px);
+            z-index: 20;
+            touch-action: none; /* Evita el scroll de la página al arrastrar en móvil */
+        }
+        
+        #graphs-header {
+            padding: 4px 8px;
+            cursor: move;
+            background-color: rgba(55, 65, 81, 0.7);
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            border-bottom: 1px solid #4b5563;
+        }
+        
+        #graphs-content {
+            display: flex;
+            padding: 8px;
+            gap: 8px;
+        }
+
+        /* Estilos para la barra de scroll personalizada */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+            border-radius: 4px;
+            border: 2px solid #1f2937;
+        }
+        
+        /* Estilos para el selector de planeta */
+        .custom-select option {
+            background: #1f2937; /* Fondo oscuro para las opciones */
+        }
+    </style>
+</head>
+<body class="antialiased overflow-hidden">
+
+    <!-- Contenedor principal de la aplicación -->
+    <div id="app-container" class="flex flex-col md:grid md:grid-cols-[7fr,3fr] w-screen h-screen">
+
+        <!-- Columna de Simulación -->
+        <div class="relative w-full h-[40vh] md:h-full bg-[#111827]">
+            <canvas id="simulationCanvas"></canvas>
+            <div id="tooltip"></div>
+            
+            <!-- Contenedor de Gráficas -->
+            <div id="graphs-container">
+                <div id="graphs-header">
+                    <p class="text-xs text-center text-gray-400">Gráficas Cinemáticas</p>
+                </div>
+                <div id="graphs-content">
+                    <canvas id="graph-xt" width="150" height="100"></canvas>
+                    <canvas id="graph-vyt" width="150" height="100"></canvas>
+                    <canvas id="graph-ayt" width="150" height="100"></canvas>
+                </div>
+            </div>
+
+            <!-- Controles de Zoom -->
+            <div class="absolute top-4 left-4 flex flex-col space-y-2">
+                <button id="zoom-in" class="w-10 h-10 bg-gray-700 text-gray-200 rounded-full shadow-lg hover:bg-gray-600 transition-colors text-xl font-bold flex items-center justify-center">+</button>
+                <button id="zoom-out" class="w-10 h-10 bg-gray-700 text-gray-200 rounded-full shadow-lg hover:bg-gray-600 transition-colors text-xl font-bold flex items-center justify-center">-</button>
+            </div>
+        </div>
+
+        <!-- Columna de Controles -->
+        <div class="w-full h-[60vh] md:h-full bg-[#1f2937] p-6 overflow-y-auto border-l border-gray-700 custom-scrollbar">
+            <div class="max-w-md mx-auto">
+                
+                <!-- Enlace de autoría -->
+                <div class="text-center mb-4">
+                    <a href="https://aulaquest.com" target="_blank" rel="noopener noreferrer" class="text-xs text-gray-500 hover:text-gray-400 transition-colors">
+                        simulación creada por aulaquest.com
+                    </a>
+                </div>
+
+                <!-- Selector de Planeta -->
+                 <div>
+                    <label for="planetSelector" class="block text-xs font-medium text-gray-400">Entorno</label>
+                    <select id="planetSelector" class="custom-select mt-1 block w-full bg-gray-700 border-gray-600 text-white rounded-md shadow-sm focus:border-sky-500 focus:ring focus:ring-sky-500 focus:ring-opacity-50 text-xs py-1 px-2">
+                        <option value="9.81">Tierra (g = 9.81 m/s²)</option>
+                        <option value="1.62">Luna (g = 1.62 m/s²)</option>
+                        <option value="3.71">Marte (g = 3.71 m/s²)</option>
+                        <option value="24.79">Júpiter (g = 24.79 m/s²)</option>
+                        <option value="274.0">Sol (g = 274.0 m/s²)</option>
+                    </select>
+                </div>
+
+                <!-- Controles de Parámetros -->
+                <div class="space-y-4 mt-4">
+                    <!-- Velocidad Inicial -->
+                    <div>
+                        <label for="initialVelocity" class="block text-xs font-medium text-gray-400">Velocidad Inicial (m/s)</label>
+                        <div class="flex items-center space-x-4 mt-1">
+                            <input type="range" id="initialVelocity" min="1" max="50" value="20" class="flex-grow">
+                            <span id="velocityValue" class="font-mono text-sky-300 bg-gray-700 rounded-md px-2 py-1 w-20 text-center text-xs">20 m/s</span>
+                        </div>
+                    </div>
+
+                    <!-- Ángulo de Disparo -->
+                    <div>
+                        <label for="angle" class="block text-xs font-medium text-gray-400">Ángulo (°)</label>
+                        <div class="flex items-center space-x-4 mt-1">
+                            <input type="range" id="angle" min="0" max="90" value="45" class="flex-grow">
+                            <span id="angleValue" class="font-mono text-sky-300 bg-gray-700 rounded-md px-2 py-1 w-20 text-center text-xs">45°</span>
+                        </div>
+                    </div>
+
+                    <!-- Altura Inicial -->
+                    <div>
+                        <label for="initialHeight" class="block text-xs font-medium text-gray-400">Altura Inicial (m)</label>
+                        <div class="flex items-center space-x-4 mt-1">
+                            <input type="range" id="initialHeight" min="0" max="100" value="0" class="flex-grow">
+                            <span id="heightValue" class="font-mono text-sky-300 bg-gray-700 rounded-md px-2 py-1 w-20 text-center text-xs">0 m</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Opciones de Visualización -->
+                <div class="mt-6 grid grid-cols-2 gap-4">
+                    <label class="flex items-center space-x-2 text-sm text-gray-400 cursor-pointer">
+                        <input type="checkbox" id="showAxesLabels" class="form-checkbox bg-gray-700 border-gray-500 text-sky-500 rounded focus:ring-sky-500" checked>
+                        <span>Ejes</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-400 cursor-pointer">
+                         <input type="checkbox" id="showGhostPath" class="form-checkbox bg-gray-700 border-gray-500 text-sky-500 rounded focus:ring-sky-500" checked>
+                        <span>Rastro</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-400 cursor-pointer">
+                        <input type="checkbox" id="showChronometer" class="form-checkbox bg-gray-700 border-gray-500 text-sky-500 rounded focus:ring-sky-500" checked>
+                        <span>Controles</span>
+                    </label>
+                     <label class="flex items-center space-x-2 text-sm text-gray-400 cursor-pointer">
+                        <input type="checkbox" id="showTarget" class="form-checkbox bg-gray-700 border-gray-500 text-sky-500 rounded focus:ring-sky-500">
+                        <span>Diana</span>
+                    </label>
+                     <label class="flex items-center space-x-2 text-sm text-gray-400 cursor-pointer">
+                        <input type="checkbox" id="showGraphs" class="form-checkbox bg-gray-700 border-gray-500 text-sky-500 rounded focus:ring-sky-500">
+                        <span>Gráficas</span>
+                    </label>
+                    <label class="flex items-center space-x-2 text-sm text-gray-400 cursor-pointer">
+                        <input type="checkbox" id="showDataTable" class="form-checkbox bg-gray-700 border-gray-500 text-sky-500 rounded focus:ring-sky-500">
+                        <span>Tabla</span>
+                    </label>
+                </div>
+
+                <!-- Slider de Resistencia del Aire -->
+                <div class="mt-6">
+                    <label for="airResistance" class="block text-xs font-medium text-gray-400">Resistencia al Aire (k)</label>
+                    <div class="flex items-center space-x-4 mt-1">
+                        <input type="range" id="airResistance" min="0" max="0.1" value="0" step="0.001" class="flex-grow">
+                        <span id="resistanceValue" class="font-mono text-sky-300 bg-gray-700 rounded-md px-2 py-1 w-20 text-center text-xs">0.000</span>
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="grid grid-cols-1 gap-4 mt-6">
+                    <button id="startBtn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-opacity-50 text-sm bg-green-600 hover:bg-green-700 focus:ring-green-500 disabled:bg-gray-500 disabled:cursor-not-allowed">Iniciar</button>
+                    <button id="speedBtn" class="text-white font-bold py-2 px-4 rounded-lg shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-opacity-50 text-sm bg-gray-600 hover:bg-gray-700 focus:ring-gray-500">Velocidad: Normal</button>
+                </div>
+
+                <!-- Tabla de Datos -->
+                <div id="dataTableContainer" class="mt-4 hidden">
+                    <div class="max-h-48 overflow-y-auto bg-gray-900 rounded-lg border border-gray-600 custom-scrollbar">
+                        <table class="w-full text-xs text-left text-gray-400">
+                            <thead class="text-[10px] text-gray-300 uppercase bg-gray-800 sticky top-0">
+                                <tr>
+                                    <th scope="col" class="px-1 py-1">Tiempo (s)</th>
+                                    <th scope="col" class="px-1 py-1">Velocidad X (m/s)</th>
+                                    <th scope="col" class="px-1 py-1">Velocidad Y (m/s)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dataTableBody">
+                                <!-- Filas se añadirán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+            const canvas = document.getElementById('simulationCanvas');
+            const ctx = canvas.getContext('2d');
+            const tooltip = document.getElementById('tooltip');
+            const graphsContainer = document.getElementById('graphs-container');
+            const graphsHeader = document.getElementById('graphs-header');
+            const graphXtCanvas = document.getElementById('graph-xt');
+            const graphVytCanvas = document.getElementById('graph-vyt');
+            const graphAytCanvas = document.getElementById('graph-ayt');
+            const dataTableContainer = document.getElementById('dataTableContainer');
+            const dataTableBody = document.getElementById('dataTableBody');
+
+            const planetSelector = document.getElementById('planetSelector');
+            const velocitySlider = document.getElementById('initialVelocity');
+            const angleSlider = document.getElementById('angle');
+            const heightSlider = document.getElementById('initialHeight');
+            const airResistanceSlider = document.getElementById('airResistance');
+
+            const velocityValue = document.getElementById('velocityValue');
+            const angleValue = document.getElementById('angleValue');
+            const heightValue = document.getElementById('heightValue');
+            const resistanceValue = document.getElementById('resistanceValue');
+
+            const startBtn = document.getElementById('startBtn');
+            const speedBtn = document.getElementById('speedBtn');
+            const zoomInBtn = document.getElementById('zoom-in');
+            const zoomOutBtn = document.getElementById('zoom-out');
+            
+            const showAxesLabelsCheckbox = document.getElementById('showAxesLabels');
+            const showChronometerCheckbox = document.getElementById('showChronometer');
+            const showGhostPathCheckbox = document.getElementById('showGhostPath');
+            const showTargetCheckbox = document.getElementById('showTarget');
+            const showGraphsCheckbox = document.getElementById('showGraphs');
+            const showDataTableCheckbox = document.getElementById('showDataTable');
+
+            // --- ESTADO DE LA SIMULACIÓN ---
+            let simulationState = {
+                isRunning: false,
+                isPaused: false,
+                animationFrameId: null,
+                zoom: window.innerWidth < 768 ? 8 : 15, // Zoom inicial responsivo
+                origin: { x: 50, y: 0 },
+                path: [],
+                ghostPath: [],
+                trajectoryDataPoints: [],
+                graphsData: { t: [], x: [], vy: [], ay: [] },
+                showAxesLabels: true,
+                showChronometer: true,
+                showGhostPath: true,
+                showGraphs: false,
+                showDataTable: false,
+                target: {
+                    active: false,
+                    x: 30,
+                    radius: 1.5,
+                    isDragging: false,
+                    isHit: false
+                },
+                speedMultiplier: 1,
+                uiControls: {
+                    pauseResume: null,
+                    reset: null
+                },
+                graphsContainerState: {
+                    isDragging: false,
+                    offsetX: 0,
+                    offsetY: 0
+                }
+            };
+
+            // --- PARÁMETROS FÍSICOS ---
+            let physics = {
+                g: -9.81,
+                dragCoefficient: 0,
+                dt: 0.01,
+                x: 0, y: 0,
+                vx: 0, vy: 0,
+                time: 0,
+                stepCounter: 0,
+                last_vy: 0,
+                lastTableUpdateTime: 0,
+            };
+
+            // --- AUDIO ---
+            let synth;
+            try {
+                synth = new Tone.Synth().toDestination();
+            } catch (e) {
+                console.error("Tone.js no pudo inicializarse.", e);
+            }
+
+            function playSuccessSound() {
+                if (synth && Tone.context.state === 'running') {
+                    synth.triggerAttackRelease("C5", "8n");
+                }
+            }
+
+
+            // --- FUNCIONES DE LA APLICACIÓN ---
+
+            function resizeCanvas() {
+                const parent = canvas.parentElement;
+                canvas.width = parent.clientWidth;
+                canvas.height = parent.clientHeight;
+                draw();
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                drawChronometerAndControls();
+                
+                ctx.save();
+                simulationState.origin.x = 40;
+                simulationState.origin.y = canvas.height - 40;
+                ctx.translate(simulationState.origin.x, simulationState.origin.y);
+
+                drawAxes();
+                drawGhostTrajectory();
+                drawTarget();
+                drawInitialVectorAndAngle();
+                drawTrajectory();
+                drawProjectile();
+                drawAllVectors();
+
+                ctx.restore();
+
+                if (simulationState.showGraphs) {
+                    drawAllGraphs();
+                }
+            }
+            
+            function drawProjectile() {
+                const currentPos = toCanvasCoords({ x: physics.x, y: physics.y });
+                const radius = 8;
+                ctx.save();
+                const gradient = ctx.createRadialGradient(
+                    currentPos.x - radius * 0.2, currentPos.y - radius * 0.3, radius * 0.1,
+                    currentPos.x, currentPos.y, radius
+                );
+                gradient.addColorStop(0, '#fca5a5');
+                gradient.addColorStop(0.9, '#ef4444');
+                gradient.addColorStop(1, '#b91c1c');
+                ctx.beginPath();
+                ctx.arc(currentPos.x, currentPos.y, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                ctx.restore();
+            }
+
+            function drawTrajectory() {
+                ctx.beginPath();
+                ctx.strokeStyle = '#06b6d4';
+                ctx.lineWidth = 2;
+                ctx.shadowColor = 'rgba(6, 182, 212, 0.5)';
+                ctx.shadowBlur = 5;
+                if (simulationState.path.length > 0) {
+                    const startPoint = toCanvasCoords(simulationState.path[0]);
+                    ctx.moveTo(startPoint.x, startPoint.y);
+                    simulationState.path.forEach(point => {
+                        const canvasPoint = toCanvasCoords(point);
+                        ctx.lineTo(canvasPoint.x, canvasPoint.y);
+                    });
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+
+                ctx.fillStyle = '#67e8f9';
+                simulationState.trajectoryDataPoints.forEach(dataPoint => {
+                    const canvasPoint = toCanvasCoords(dataPoint);
+                    ctx.beginPath();
+                    ctx.arc(canvasPoint.x, canvasPoint.y, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                });
+            }
+
+            function drawGhostTrajectory() {
+                if (!simulationState.showGhostPath || simulationState.ghostPath.length < 2) return;
+
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(107, 114, 128, 0.6)'; // Gris semi-transparente
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]); // Línea discontinua
+
+                const startPoint = toCanvasCoords(simulationState.ghostPath[0]);
+                ctx.moveTo(startPoint.x, startPoint.y);
+                simulationState.ghostPath.forEach(point => {
+                    const canvasPoint = toCanvasCoords(point);
+                    ctx.lineTo(canvasPoint.x, canvasPoint.y);
+                });
+                ctx.stroke();
+                ctx.setLineDash([]); // Resetear a línea sólida para otros dibujos
+            }
+
+            function drawTarget() {
+                if (!simulationState.target.active) return;
+                const target = simulationState.target;
+                const targetPos = toCanvasCoords({ x: target.x, y: 0 });
+                const radiusCanvas = target.radius * simulationState.zoom;
+
+                ctx.save();
+                
+                const colors = target.isHit 
+                    ? ['#4ade80', '#22c55e', '#16a34a'] 
+                    : ['#f87171', '#ef4444', '#dc2626'];
+
+                ctx.beginPath();
+                ctx.fillStyle = colors[0];
+                ctx.ellipse(targetPos.x, targetPos.y, radiusCanvas, radiusCanvas * 0.3, 0, 0, 2 * Math.PI);
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.fillStyle = colors[1];
+                ctx.ellipse(targetPos.x, targetPos.y, radiusCanvas * 0.66, radiusCanvas * 0.3 * 0.66, 0, 0, 2 * Math.PI);
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.fillStyle = colors[2];
+                ctx.ellipse(targetPos.x, targetPos.y, radiusCanvas * 0.33, radiusCanvas * 0.3 * 0.33, 0, 0, 2 * Math.PI);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(17, 24, 39, 0.8)';
+                ctx.strokeStyle = '#4b5563';
+                ctx.lineWidth = 1;
+                const labelText = `${target.x.toFixed(1)} m`;
+                ctx.font = '10px Inter';
+                const textMetrics = ctx.measureText(labelText);
+                const labelWidth = textMetrics.width + 10;
+                const labelHeight = 16;
+                ctx.beginPath();
+                ctx.roundRect(targetPos.x - labelWidth / 2, targetPos.y + 5, labelWidth, labelHeight, [4]);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#d1d5db';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(labelText, targetPos.x, targetPos.y + 5 + labelHeight / 2);
+
+                ctx.restore();
+            }
+
+            function drawArrow(context, fromx, fromy, tox, toy, color) {
+                const headlen = 8;
+                const dx = tox - fromx;
+                const dy = toy - fromy;
+                if (dx * dx + dy * dy < 1) return;
+                const angle = Math.atan2(dy, dx);
+                context.save();
+                context.strokeStyle = color;
+                context.fillStyle = color;
+                context.lineWidth = 2;
+                context.beginPath();
+                context.moveTo(fromx, fromy);
+                context.lineTo(tox, toy);
+                context.stroke();
+                context.beginPath();
+                context.moveTo(tox, toy);
+                context.lineTo(tox - headlen * Math.cos(angle - Math.PI / 7), toy - headlen * Math.sin(angle - Math.PI / 7));
+                context.lineTo(tox - headlen * Math.cos(angle + Math.PI / 7), toy - headlen * Math.sin(angle + Math.PI / 7));
+                context.closePath();
+                context.fill();
+                context.restore();
+            }
+            
+            function drawInitialVectorAndAngle() {
+                if (simulationState.isRunning) return;
+                const v0 = parseFloat(velocitySlider.value);
+                const angleRad = parseFloat(angleSlider.value) * (Math.PI / 180);
+                const y0 = parseFloat(heightSlider.value);
+                if (v0 === 0) return;
+                const vectorScale = 0.8; 
+                const startPos = toCanvasCoords({ x: 0, y: y0 });
+                const vx = v0 * Math.cos(angleRad);
+                const vy = v0 * Math.sin(angleRad);
+                const endPoint = {
+                    x: startPos.x + (vx * simulationState.zoom * vectorScale),
+                    y: startPos.y - (vy * simulationState.zoom * vectorScale)
+                };
+                drawArrow(ctx, startPos.x, startPos.y, endPoint.x, endPoint.y, '#f59e0b');
+                const arcRadius = 30;
+                ctx.save();
+                ctx.strokeStyle = '#f59e0b';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(startPos.x, startPos.y, arcRadius, 0, -angleRad, true);
+                ctx.stroke();
+                const angleTextX = startPos.x + (arcRadius + 15) * Math.cos(-angleRad / 2);
+                const angleTextY = startPos.y + (arcRadius + 15) * Math.sin(-angleRad / 2);
+                ctx.fillStyle = '#f59e0b';
+                ctx.font = '12px Inter';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${angleSlider.value}°`, angleTextX, angleTextY);
+                ctx.restore();
+            }
+
+            function drawAllVectors() {
+                if (!simulationState.isRunning) return;
+                
+                const projectileCanvasPos = toCanvasCoords({ x: physics.x, y: physics.y });
+                const vectorScale = 1.5;
+
+                // Vector Vx
+                const vxLengthCanvas = physics.vx * simulationState.zoom * vectorScale;
+                const vxColor = '#38bdf8';
+                drawArrow(ctx, projectileCanvasPos.x, projectileCanvasPos.y, projectileCanvasPos.x + vxLengthCanvas, projectileCanvasPos.y, vxColor);
+                
+                // Vector Vy
+                const vyLengthCanvas = physics.vy * simulationState.zoom * vectorScale;
+                const vyColor = '#a78bfa';
+                drawArrow(ctx, projectileCanvasPos.x, projectileCanvasPos.y, projectileCanvasPos.x, projectileCanvasPos.y - vyLengthCanvas, vyColor);
+                
+                // Etiquetas de Vectores de Velocidad
+                ctx.font = '12px Inter';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = vxColor;
+                ctx.textAlign = 'left';
+                ctx.fillText(`vx: ${physics.vx.toFixed(1)}`, projectileCanvasPos.x + vxLengthCanvas + 10, projectileCanvasPos.y);
+                ctx.fillStyle = vyColor;
+                ctx.textAlign = 'center';
+                const yLabelOffset = vyLengthCanvas > 0 ? -15 : 15;
+                ctx.fillText(`vy: ${physics.vy.toFixed(1)}`, projectileCanvasPos.x, projectileCanvasPos.y - vyLengthCanvas + yLabelOffset);
+                
+                // Vector de Resistencia del Aire
+                if (physics.dragCoefficient > 0) {
+                    const v = Math.sqrt(physics.vx**2 + physics.vy**2);
+                    const dragForceX = -physics.dragCoefficient * v * physics.vx;
+                    const dragForceY = -physics.dragCoefficient * v * physics.vy;
+                    const dragVectorScale = 5; // Escala para que el vector de arrastre sea visible
+                    const dragXCanvas = dragForceX * simulationState.zoom * dragVectorScale;
+                    const dragYCanvas = dragForceY * simulationState.zoom * dragVectorScale;
+                    drawArrow(ctx, projectileCanvasPos.x, projectileCanvasPos.y, projectileCanvasPos.x + dragXCanvas, projectileCanvasPos.y - dragYCanvas, '#ec4899'); // Color Rosa
+                }
+            }
+
+            function drawAxes() {
+                const { width, height } = canvas;
+                const { zoom, origin } = simulationState;
+                ctx.strokeStyle = '#4b5563';
+                ctx.fillStyle = '#d1d5db';
+                ctx.font = '12px Inter';
+                
+                let gridSpacingPhysX = 5;
+                if (zoom > 20) gridSpacingPhysX = 2;
+                if (zoom > 40) gridSpacingPhysX = 1;
+                if (zoom < 8) gridSpacingPhysX = 10;
+                if (zoom < 4) gridSpacingPhysX = 20;
+
+                let gridSpacingPhysY = 2;
+                if (zoom > 25) gridSpacingPhysY = 1;
+                if (zoom < 8) gridSpacingPhysY = 5;
+                if (zoom < 3) gridSpacingPhysY = 10;
+
+                const gridSpacingCanvasX = gridSpacingPhysX * zoom;
+                const gridSpacingCanvasY = gridSpacingPhysY * zoom;
+
+                ctx.beginPath();
+                ctx.lineWidth = 0.5;
+                const startXCanvas = -origin.x;
+                const endXCanvas = width - origin.x;
+                for (let x = Math.ceil(startXCanvas / gridSpacingCanvasX) * gridSpacingCanvasX; x <= endXCanvas; x += gridSpacingCanvasX) {
+                    ctx.moveTo(x, -origin.y);
+                    ctx.lineTo(x, height - origin.y);
+                }
+                const startYCanvas = -origin.y;
+                const endYCanvas = height - origin.y;
+                for (let y = Math.floor(startYCanvas / gridSpacingCanvasY) * gridSpacingCanvasY; y <= endYCanvas; y += gridSpacingCanvasY) {
+                    ctx.moveTo(-origin.x, y);
+                    ctx.lineTo(width - origin.x, y);
+                }
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.strokeStyle = '#6b7280';
+                ctx.lineWidth = 1.5;
+                ctx.moveTo(0, -origin.y);
+                ctx.lineTo(0, height - origin.y);
+                ctx.moveTo(-origin.x, 0);
+                ctx.lineTo(width - origin.x, 0);
+                ctx.stroke();
+                
+                if (simulationState.showAxesLabels) {
+                    ctx.fillStyle = '#d1d5db';
+                    ctx.font = '10px Inter';
+                    ctx.textBaseline = 'top';
+                    ctx.textAlign = 'center';
+                    const firstXPhysLabel = Math.floor(startXCanvas / gridSpacingCanvasX) * gridSpacingPhysX;
+                    let lastXLabelPos = -Infinity;
+                    const minLabelSpacingCanvasX = 40;
+                    for (let xPhys = firstXPhysLabel; (xPhys * zoom) <= endXCanvas; xPhys += gridSpacingPhysX) {
+                        if (xPhys === 0) continue;
+                        const xCanvas = xPhys * zoom;
+                        if (xCanvas > -origin.x + 20 && xCanvas < width - origin.x - 20) {
+                            if (xCanvas - lastXLabelPos > minLabelSpacingCanvasX) {
+                                ctx.fillText(xPhys.toFixed(0) + 'm', xCanvas, 5);
+                                lastXLabelPos = xCanvas;
+                            }
+                        }
+                    }
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'middle';
+                    const firstYPhysLabel = Math.floor((-endYCanvas / zoom) / gridSpacingCanvasY) * gridSpacingPhysY;
+                    const lastYPhysLabel = Math.ceil((-startYCanvas / zoom) / gridSpacingCanvasY) * gridSpacingPhysY;
+                    let lastYLabelPos = Infinity;
+                    const minLabelSpacingCanvasY = 20;
+                    for (let yPhys = firstYPhysLabel; yPhys <= lastYPhysLabel; yPhys += gridSpacingPhysY) {
+                        if (yPhys === 0) continue;
+                        const yCanvas = -yPhys * zoom;
+                        if (yCanvas > -origin.y + 20 && yCanvas < height - origin.y - 20) {
+                            if (Math.abs(yCanvas - lastYLabelPos) > minLabelSpacingCanvasY) {
+                                ctx.fillText(yPhys.toFixed(0) + 'm', -5, yCanvas);
+                                lastYLabelPos = yCanvas;
+                            }
+                        }
+                    }
+                }
+            }
+
+            function drawChronometerAndControls() {
+                if (!simulationState.showChronometer) {
+                    simulationState.uiControls.pauseResume = null;
+                    simulationState.uiControls.reset = null;
+                    return;
+                }
+                const time = (simulationState.isRunning || physics.time > 0) ? physics.time : 0;
+                const text = `${time.toFixed(2)}s`;
+                ctx.save();
+                ctx.font = 'bold 16px Inter';
+                const textMetrics = ctx.measureText(text);
+                
+                const boxWidth = textMetrics.width + 24 + 32 + 32;
+                const boxHeight = 36;
+                const boxX = canvas.width - boxWidth - 15;
+                const boxY = 15;
+
+                ctx.fillStyle = 'rgba(31, 41, 55, 0.8)';
+                ctx.strokeStyle = '#4b5563';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.roundRect(boxX, boxY, boxWidth, boxHeight, [8]);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#d1d5db';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, boxX + 12, boxY + boxHeight / 2);
+
+                const separatorX = boxX + textMetrics.width + 24;
+                ctx.strokeStyle = '#4b5563';
+                ctx.beginPath();
+                ctx.moveTo(separatorX, boxY + 8);
+                ctx.lineTo(separatorX, boxY + boxHeight - 8);
+                ctx.stroke();
+
+                const pauseResumeX = separatorX + 16;
+                simulationState.uiControls.pauseResume = { x: pauseResumeX - 10, y: boxY, width: 28, height: boxHeight };
+                ctx.fillStyle = '#d1d5db';
+                ctx.font = 'bold 20px Inter';
+                ctx.textAlign = 'center';
+                if (simulationState.isPaused) {
+                    ctx.beginPath();
+                    ctx.moveTo(pauseResumeX - 3, boxY + 10);
+                    ctx.lineTo(pauseResumeX - 3, boxY + boxHeight - 10);
+                    ctx.lineTo(pauseResumeX + 6, boxY + boxHeight / 2);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.fillRect(pauseResumeX - 6, boxY + 10, 4, boxHeight - 20);
+                    ctx.fillRect(pauseResumeX + 2, boxY + 10, 4, boxHeight - 20);
+                }
+
+                const resetX = pauseResumeX + 28;
+                simulationState.uiControls.reset = { x: resetX - 12, y: boxY, width: 28, height: boxHeight };
+                ctx.strokeStyle = '#d1d5db';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(resetX, boxY + boxHeight / 2, 8, Math.PI * 0.7, Math.PI * 2.2);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(resetX + 4, boxY + boxHeight / 2 - 6);
+                ctx.lineTo(resetX + 8, boxY + boxHeight / 2 - 6);
+                ctx.lineTo(resetX + 8, boxY + boxHeight / 2 - 10);
+                ctx.fill();
+
+                ctx.restore();
+            }
+            
+            function drawAllGraphs() {
+                const { t, x, vy, ay } = simulationState.graphsData;
+                if (t.length < 2) return;
+
+                const graphCanvases = [
+                    { canvas: graphXtCanvas, data: x, label: 'x(t)', color: '#34d399' },
+                    { canvas: graphVytCanvas, data: vy, label: 'vy(t)', color: '#60a5fa' },
+                    { canvas: graphAytCanvas, data: ay, label: 'ay(t)', color: '#f87171' }
+                ];
+
+                graphCanvases.forEach(graph => {
+                    drawSingleGraph(graph.canvas, t, graph.data, graph.label, graph.color);
+                });
+            }
+
+            function drawSingleGraph(graphCanvas, xData, yData, label, color) {
+                const gCtx = graphCanvas.getContext('2d');
+                const w = graphCanvas.width;
+                const h = graphCanvas.height;
+                const padding = 15;
+
+                gCtx.clearRect(0, 0, w, h);
+                
+                // Dibuja el fondo y los ejes
+                gCtx.fillStyle = 'rgba(17, 24, 39, 0.5)';
+                gCtx.fillRect(0, 0, w, h);
+                gCtx.strokeStyle = '#4b5563';
+                gCtx.lineWidth = 0.5;
+                gCtx.beginPath();
+                gCtx.moveTo(padding, 0);
+                gCtx.lineTo(padding, h - padding);
+                gCtx.lineTo(w, h - padding);
+                gCtx.stroke();
+
+                // Dibuja la etiqueta del gráfico
+                gCtx.fillStyle = color;
+                gCtx.font = '10px Inter';
+                gCtx.textAlign = 'center';
+                gCtx.fillText(label, w / 2, 8);
+
+                if (xData.length < 2) return;
+
+                // Escala de los datos
+                const xMax = xData[xData.length - 1];
+                const yMin = Math.min(...yData);
+                const yMax = Math.max(...yData);
+                const yRange = yMax - yMin === 0 ? 1 : yMax - yMin;
+
+                const toGraphX = (val) => padding + (val / xMax) * (w - padding);
+                const toGraphY = (val) => (h - padding) - ((val - yMin) / yRange) * (h - padding * 2);
+
+                // Dibuja la línea del gráfico
+                gCtx.beginPath();
+                gCtx.moveTo(toGraphX(xData[0]), toGraphY(yData[0]));
+                for (let i = 1; i < xData.length; i++) {
+                    gCtx.lineTo(toGraphX(xData[i]), toGraphY(yData[i]));
+                }
+                gCtx.strokeStyle = color;
+                gCtx.lineWidth = 1.5;
+                gCtx.stroke();
+            }
+
+            function toCanvasCoords(point) {
+                return {
+                    x: point.x * simulationState.zoom,
+                    y: -point.y * simulationState.zoom
+                };
+            }
+
+            function gameLoop() {
+                if (simulationState.isRunning && !simulationState.isPaused) {
+                    const timeStep = physics.dt * simulationState.speedMultiplier;
+                    for (let i = 0; i < 5; i++) {
+                        
+                        const v = Math.sqrt(physics.vx**2 + physics.vy**2);
+                        const dragForceX = -physics.dragCoefficient * v * physics.vx;
+                        const dragForceY = -physics.dragCoefficient * v * physics.vy;
+                        
+                        const ax = dragForceX; 
+                        const ay = physics.g + dragForceY;
+
+                        physics.last_vy = physics.vy;
+                        physics.vx += ax * timeStep;
+                        physics.vy += ay * timeStep;
+                        physics.x += physics.vx * timeStep;
+                        physics.y += physics.vy * timeStep;
+                        physics.time += timeStep;
+                        physics.stepCounter++;
+                        simulationState.path.push({ x: physics.x, y: physics.y });
+                        
+                        if (simulationState.showDataTable && physics.time >= physics.lastTableUpdateTime + 0.5) {
+                            addTableRow();
+                            physics.lastTableUpdateTime = physics.time;
+                        }
+
+                        if (simulationState.showGraphs) {
+                            simulationState.graphsData.t.push(physics.time);
+                            simulationState.graphsData.x.push(physics.x);
+                            simulationState.graphsData.vy.push(physics.vy);
+                            simulationState.graphsData.ay.push(ay);
+                        }
+
+                        if (physics.last_vy > 0 && physics.vy <= 0) {
+                            const t_apex = physics.last_vy / -ay;
+                            const apex_x = physics.x - physics.vx * (timeStep - t_apex);
+                            const apex_y = physics.y - physics.vy * (timeStep - t_apex) - 0.5 * ay * (timeStep - t_apex)**2;
+                             simulationState.trajectoryDataPoints.push({
+                                x: apex_x, y: apex_y,
+                                vx: physics.vx, vy: 0,
+                                time: physics.time - (timeStep - t_apex)
+                            });
+                        }
+                        
+                        if (physics.stepCounter % 20 === 0) {
+                             simulationState.trajectoryDataPoints.push({
+                                x: physics.x, y: physics.y,
+                                vx: physics.vx, vy: physics.vy,
+                                time: physics.time
+                            });
+                        }
+                        
+                        if (physics.y < 0) {
+                            physics.y = 0;
+                            simulationState.trajectoryDataPoints.push({
+                                x: physics.x, y: physics.y,
+                                vx: physics.vx, vy: physics.vy,
+                                time: physics.time
+                            });
+                            if(simulationState.showDataTable) addTableRow(); // Añadir el último punto a la tabla
+                            simulationState.isRunning = false;
+                            
+                            if(simulationState.target.active) {
+                                if (Math.abs(physics.x - simulationState.target.x) <= simulationState.target.radius) {
+                                    simulationState.target.isHit = true;
+                                    playSuccessSound();
+                                }
+                            }
+
+                            updateUIState();
+                            break;
+                        }
+                    }
+                }
+                draw();
+                if (simulationState.isRunning) {
+                    simulationState.animationFrameId = requestAnimationFrame(gameLoop);
+                }
+            }
+            
+            function addTableRow() {
+                const newRow = dataTableBody.insertRow();
+                newRow.className = "bg-gray-800 border-b border-gray-700 font-mono";
+                
+                const cellTime = newRow.insertCell();
+                cellTime.className = "px-1 py-0.5";
+                cellTime.textContent = physics.time.toFixed(2);
+
+                const cellVx = newRow.insertCell();
+                cellVx.className = "px-1 py-0.5";
+                cellVx.textContent = physics.vx.toFixed(2);
+
+                const cellVy = newRow.insertCell();
+                cellVy.className = "px-1 py-0.5";
+                cellVy.textContent = physics.vy.toFixed(2);
+
+                dataTableContainer.querySelector('div').scrollTop = dataTableContainer.querySelector('div').scrollHeight;
+            }
+
+            function startSimulation() {
+                if (simulationState.isRunning) return;
+
+                if (simulationState.showGhostPath && simulationState.path.length > 1) {
+                    simulationState.ghostPath = [...simulationState.path];
+                } else {
+                    simulationState.ghostPath = [];
+                }
+
+                resetSimulation(false);
+                const v0 = parseFloat(velocitySlider.value);
+                const angleRad = parseFloat(angleSlider.value) * (Math.PI / 180);
+                const y0 = parseFloat(heightSlider.value);
+                physics.x = 0; physics.y = y0;
+                physics.vx = v0 * Math.cos(angleRad);
+                physics.vy = v0 * Math.sin(angleRad);
+                physics.last_vy = physics.vy;
+                simulationState.path = [{x: physics.x, y: physics.y}];
+                simulationState.isRunning = true;
+                simulationState.isPaused = false;
+                updateUIState();
+                gameLoop();
+            }
+
+            function togglePause() {
+                if (!simulationState.isRunning) return;
+                simulationState.isPaused = !simulationState.isPaused;
+                updateUIState();
+                if (!simulationState.isPaused) {
+                    gameLoop();
+                } else {
+                    draw();
+                }
+            }
+
+            function resetSimulation(fullReset = true) {
+                if (simulationState.animationFrameId) {
+                    cancelAnimationFrame(simulationState.animationFrameId);
+                }
+                simulationState.isRunning = false;
+                simulationState.isPaused = false;
+                simulationState.path = [];
+                simulationState.trajectoryDataPoints = [];
+                simulationState.graphsData = { t: [], x: [], vy: [], ay: [] };
+                dataTableBody.innerHTML = '';
+                simulationState.target.isHit = false;
+                if (fullReset) {
+                    simulationState.ghostPath = [];
+                }
+                physics.x = 0;
+                physics.y = parseFloat(heightSlider.value);
+                physics.time = 0;
+                physics.vx = 0;
+                physics.vy = 0;
+                physics.last_vy = 0;
+                physics.stepCounter = 0;
+                physics.lastTableUpdateTime = 0;
+                updateUIState();
+                if (fullReset) draw();
+            }
+
+            function updateUIState() {
+                startBtn.disabled = simulationState.isRunning;
+            }
+            
+            function handleCanvasInteraction(event) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left;
+                const mouseY = event.clientY - rect.top;
+                const simMouseX = (mouseX - simulationState.origin.x) / simulationState.zoom;
+
+                // --- Lógica de la Diana ---
+                if (simulationState.target.active && event.type === 'mousedown') {
+                    const targetPos = toCanvasCoords({x: simulationState.target.x, y:0});
+                    const radiusCanvas = simulationState.target.radius * simulationState.zoom;
+                    const dx = mouseX - (targetPos.x + simulationState.origin.x);
+                    const dy = mouseY - (targetPos.y + simulationState.origin.y);
+                    const rx = radiusCanvas;
+                    const ry = radiusCanvas * 0.3;
+                    if ((dx*dx)/(rx*rx) + (dy*dy)/(ry*ry) <= 1) {
+                       simulationState.target.isDragging = true;
+                       canvas.classList.add('dragging');
+                    }
+                }
+                if (simulationState.target.isDragging && event.type === 'mousemove') {
+                    simulationState.target.x = simMouseX;
+                    draw();
+                }
+                if (event.type === 'mouseup') {
+                    simulationState.target.isDragging = false;
+                    canvas.classList.remove('dragging');
+                }
+
+                // --- Lógica del Tooltip ---
+                const simMouseY = -(mouseY - simulationState.origin.y) / simulationState.zoom;
+                let foundPoint = null;
+                const hoverRadius = 5 / simulationState.zoom;
+                for (const dataPoint of simulationState.trajectoryDataPoints) {
+                    const dx = simMouseX - dataPoint.x;
+                    const dy = simMouseY - dataPoint.y;
+                    if (dx * dx + dy * dy < hoverRadius * hoverRadius) {
+                        foundPoint = dataPoint;
+                        break;
+                    }
+                }
+                if (foundPoint) {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${mouseX}px`;
+                    // Posiciona el tooltip arriba si está cerca del borde inferior
+                    if (mouseY > canvas.height - 100) {
+                        tooltip.style.top = `${mouseY}px`;
+                        tooltip.style.transform = `translate(15px, -110%)`;
+                    } else {
+                        tooltip.style.top = `${mouseY}px`;
+                        tooltip.style.transform = `translate(15px, 0)`;
+                    }
+                    tooltip.innerHTML = `
+                        <strong>Tiempo:</strong> ${foundPoint.time.toFixed(2)} s<br>
+                        <strong>Posición X:</strong> ${foundPoint.x.toFixed(2)} m<br>
+                        <strong>Altura Y:</strong> ${foundPoint.y.toFixed(2)} m<br>
+                        <strong>Velocidad X:</strong> ${foundPoint.vx.toFixed(2)} m/s<br>
+                        <strong>Velocidad Y:</strong> ${foundPoint.vy.toFixed(2)} m/s
+                    `;
+                } else {
+                    tooltip.style.display = 'none';
+                }
+
+                // --- Lógica de los botones del cronómetro ---
+                const { pauseResume, reset } = simulationState.uiControls;
+                let onButton = false;
+                if (pauseResume && mouseX > pauseResume.x && mouseX < pauseResume.x + pauseResume.width && mouseY > pauseResume.y && mouseY < pauseResume.y + pauseResume.height) {
+                    onButton = true;
+                    if (event.type === 'click' && simulationState.isRunning) togglePause();
+                }
+                if (reset && mouseX > reset.x && mouseX < reset.x + reset.width && mouseY > reset.y && mouseY < reset.y + reset.height) {
+                    onButton = true;
+                    if (event.type === 'click') resetSimulation(true);
+                }
+                
+                if (!simulationState.target.isDragging) {
+                    canvas.className = onButton ? 'interactive' : '';
+                }
+            }
+
+            // --- EVENT LISTENERS ---
+            planetSelector.addEventListener('change', (e) => {
+                physics.g = -parseFloat(e.target.value);
+                resetSimulation(true);
+            });
+
+            velocitySlider.addEventListener('input', (e) => {
+                velocityValue.textContent = `${e.target.value} m/s`;
+                if (!simulationState.isRunning) draw();
+            });
+            angleSlider.addEventListener('input', (e) => {
+                angleValue.textContent = `${e.target.value}°`;
+                if (!simulationState.isRunning) draw();
+            });
+            heightSlider.addEventListener('input', (e) => {
+                heightValue.textContent = `${e.target.value} m`;
+                if (!simulationState.isRunning) resetSimulation();
+            });
+            airResistanceSlider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                resistanceValue.textContent = value.toFixed(3);
+                physics.dragCoefficient = value;
+                if (!simulationState.isRunning) draw();
+            });
+
+            startBtn.addEventListener('click', () => {
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                startSimulation();
+            });
+            
+            speedBtn.addEventListener('click', () => {
+                if (simulationState.speedMultiplier === 1) {
+                    simulationState.speedMultiplier = 0.25;
+                    speedBtn.textContent = 'Velocidad: Lenta';
+                } else {
+                    simulationState.speedMultiplier = 1;
+                    speedBtn.textContent = 'Velocidad: Normal';
+                }
+            });
+
+            showAxesLabelsCheckbox.addEventListener('change', (e) => {
+                simulationState.showAxesLabels = e.target.checked;
+                draw();
+            });
+            showChronometerCheckbox.addEventListener('change', (e) => {
+                simulationState.showChronometer = e.target.checked;
+                draw();
+            });
+            showGhostPathCheckbox.addEventListener('change', (e) => {
+                simulationState.showGhostPath = e.target.checked;
+                if (!e.target.checked) {
+                    simulationState.ghostPath = [];
+                }
+                draw();
+            });
+             showTargetCheckbox.addEventListener('change', (e) => {
+                simulationState.target.active = e.target.checked;
+                draw();
+            });
+             showGraphsCheckbox.addEventListener('change', (e) => {
+                simulationState.showGraphs = e.target.checked;
+                graphsContainer.style.display = e.target.checked ? 'block' : 'none';
+                draw();
+            });
+            showDataTableCheckbox.addEventListener('change', (e) => {
+                simulationState.showDataTable = e.target.checked;
+                dataTableContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+            
+            function handleGraphDrag(e) {
+                if (simulationState.graphsContainerState.isDragging) {
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    graphsContainer.style.left = `${clientX - simulationState.graphsContainerState.offsetX}px`;
+                    graphsContainer.style.top = `${clientY - simulationState.graphsContainerState.offsetY}px`;
+                }
+            }
+
+            graphsHeader.addEventListener('mousedown', (e) => {
+                simulationState.graphsContainerState.isDragging = true;
+                simulationState.graphsContainerState.offsetX = e.clientX - graphsContainer.offsetLeft;
+                simulationState.graphsContainerState.offsetY = e.clientY - graphsContainer.offsetTop;
+            });
+            
+            graphsHeader.addEventListener('touchstart', (e) => {
+                simulationState.graphsContainerState.isDragging = true;
+                simulationState.graphsContainerState.offsetX = e.touches[0].clientX - graphsContainer.offsetLeft;
+                simulationState.graphsContainerState.offsetY = e.touches[0].clientY - graphsContainer.offsetTop;
+            }, { passive: true });
+
+            document.addEventListener('mousemove', handleGraphDrag);
+            document.addEventListener('touchmove', handleGraphDrag);
+
+            document.addEventListener('mouseup', () => {
+                simulationState.graphsContainerState.isDragging = false;
+            });
+            document.addEventListener('touchend', () => {
+                simulationState.graphsContainerState.isDragging = false;
+            });
+            
+            zoomInBtn.addEventListener('click', () => { 
+                simulationState.zoom *= 1.2;
+                draw();
+            });
+            zoomOutBtn.addEventListener('click', () => { 
+                simulationState.zoom /= 1.2;
+                draw();
+            });
+
+            canvas.addEventListener('mousemove', handleCanvasInteraction);
+            canvas.addEventListener('mousedown', handleCanvasInteraction);
+            canvas.addEventListener('mouseup', handleCanvasInteraction);
+            canvas.addEventListener('click', handleCanvasInteraction);
+            canvas.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+                canvas.className = '';
+                simulationState.target.isDragging = false;
+            });
+
+            window.addEventListener('resize', resizeCanvas);
+
+            // --- INICIALIZACIÓN ---
+            graphsContainer.style.left = `${canvas.width / 2 - graphsContainer.offsetWidth / 2}px`;
+            graphsContainer.style.top = `20px`;
+            resizeCanvas();
+            resetSimulation();
+        });
+    </script>
+</body>
+</html>
